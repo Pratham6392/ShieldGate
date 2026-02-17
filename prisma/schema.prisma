@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workflow {
+  id          String   @id @default(cuid())
+  intent      String
+  yieldId     String
+  address     String
+  status      String   @default("created")
+  requestHash String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  steps  Step[]
+  events AuditEvent[]
+
+  @@index([yieldId])
+  @@index([address])
+  @@index([status])
+}
+
+model Step {
+  id            String   @id @default(cuid())
+  workflowId    String
+  stepIndex     Int
+  network       String
+  title         String?
+  status        String   @default("ready")
+  txId          String?
+  unsignedTx    Json
+  structuredTx  Json?
+  annotatedTx   Json?
+  isMessage     Boolean  @default(false)
+  shieldOk      Boolean  @default(false)
+  shieldReason  String?
+  signedPayload String?
+  txHash        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, stepIndex])
+  @@index([workflowId])
+  @@index([status])
+  @@index([txHash])
+}
+
+model IdempotencyKey {
+  id           String   @id @default(cuid())
+  scope        String
+  key          String
+  requestHash  String
+  responseBody Json
+  createdAt    DateTime @default(now())
+
+  @@unique([scope, key])
+  @@index([createdAt])
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  workflowId String
+  type       String
+  data       Json
+  createdAt  DateTime @default(now())
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([type])
+  @@index([createdAt])
+}
