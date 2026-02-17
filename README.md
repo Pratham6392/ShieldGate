@@ -1,16 +1,34 @@
 # ShieldGate
 
-ShieldGate is a production-style backend service that safely orchestrates Yield.xyz yield actions using a **zero-trust** model.
+ShieldGate is a backend service designed for production environments that intermediates between client applications and the Yield.xyz Actions API. It orchestrates yield-bearing blockchain actions using a **zero-trust** security model: ShieldGate never blindly trusts incoming payloads or upstream responses. Instead, every transaction from Yield.xyz is independently validated against policy constraints before signing. All actions—including transaction persistence, validation, signing (EVM, via LocalSigner), and event auditing—are managed through a consistent workflow abstraction that enforces idempotency, strong request tracing, and clear API contracts.
 
 It sits between:
 
 Partner App → ShieldGate → Yield.xyz Actions API → Blockchain
 
-ShieldGate’s job is to:
-- request unsigned transactions from Yield.xyz
-- validate each transaction with Shield (zero-trust validation)
-- sign only validated steps (EVM only, LocalSigner)
-- enforce idempotency, track state, and keep an audit trail
+**ShieldGate’s job is to:**
+- **request unsigned transactions from Yield.xyz**
+- **validate each transaction with Shield (zero-trust validation)**
+- **sign only validated steps (EVM only, LocalSigner)**
+- **enforce idempotency, track state, and keep an audit trail**
+
+## Features (what this project solves)
+
+ShieldGate solves the “production gap” between a product backend and blockchain transactions.
+
+- **Safer signing (zero-trust)**: validates every unsigned transaction from Yield.xyz before signing, so the server does not blindly sign tampered payloads.
+- **Retry-safe writes (idempotency)**: prevents accidental duplicate workflows or duplicate signatures caused by double clicks, client retries, or network timeouts.
+- **Transaction orchestration (workflow + steps)**: converts a high-level intent (enter/exit/manage) into persisted step records with ordering and status.
+- **Auditability**: stores an audit trail for workflow creation, upstream action creation, validation failures, and step signing.
+- **Operational resilience basics**: upstream errors are mapped to stable error codes; upstream 429 is surfaced as `UPSTREAM_RATE_LIMITED` with retry hints.
+- **Clean API ergonomics**: consistent error envelope, request tracing (`x-request-id`), and Swagger docs for quick demos.
+
+### What a successful workflow means
+
+When `POST /v1/workflows` returns `workflow.status = validated`:
+- Yield.xyz returned 1..N unsigned transactions
+- ShieldGate validated each step (Shield) and stored `shieldOk/shieldReason`
+- steps were persisted with `status = ready` and can be signed via the signing endpoint
 
 ## What’s implemented
 
@@ -235,14 +253,3 @@ Then confirm `.env` `DATABASE_URL` port matches the port mapping in `docker-comp
 - If Redis `6379` is already used on your machine, update compose port mapping and `REDIS_URL`.
 - If Postgres `5432` is used by a local Postgres service, map docker Postgres to a different host port and update `DATABASE_URL`.
 
-## Hiring-manager demo script (5–7 minutes)
-
-1. Start infra + API:
-   - `docker compose up -d`
-   - `npm run db:migrate`
-   - `npm run start:dev`
-2. Open Swagger: `http://localhost:3000/docs`
-3. Create workflow (mock mode): show 2 steps + validated status
-4. Re-run same request with same `idempotency-key`: show same workflow id
-5. Sign step 0: show step becomes signed (and audit trail exists)
-6. Run `npm run test:e2e`: show green test suite
